@@ -13,6 +13,10 @@ import {
   type WorkoutProgram,
 } from "@/lib/workout";
 
+type TimerAppProps = {
+  embeddedIntro?: boolean;
+};
+
 type ProgramsResponse = {
   programs: WorkoutProgram[];
   persistence: "enabled" | "disabled";
@@ -205,7 +209,7 @@ function getPhaseCardClass(phase: WorkoutPhase["kind"]) {
   }
 }
 
-export function TimerApp() {
+export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   const [programs, setPrograms] = useState<WorkoutProgram[]>([DEFAULT_PROGRAM]);
   const [selectedProgramId, setSelectedProgramId] = useState(DEFAULT_PROGRAM.id);
   const [draft, setDraft] = useState<ProgramDraft>(toDraft(DEFAULT_PROGRAM));
@@ -221,6 +225,7 @@ export function TimerApp() {
     DEFAULT_PROGRAM.warmupSeconds,
   );
   const [activeProgram, setActiveProgram] = useState<WorkoutProgram | null>(null);
+  const [focusTimerView, setFocusTimerView] = useState(false);
 
   const audioEngineRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
   const phasesRef = useRef<WorkoutPhase[]>(buildWorkoutPhases(DEFAULT_PROGRAM));
@@ -231,6 +236,7 @@ export function TimerApp() {
   const nextPhaseStartedAtRef = useRef<number>(0);
   const endTimeRef = useRef<number | null>(null);
   const syncTimerRef = useRef<number | null>(null);
+  const timerPanelRef = useRef<HTMLElement | null>(null);
 
   const buildRandomCueSets = (setCount: number) => {
     const targets = new Set<number>();
@@ -327,6 +333,15 @@ export function TimerApp() {
       window.localStorage.setItem(LAST_USED_PROGRAM_KEY, selectedProgramId);
     }
   }, [selectedProgramId]);
+
+  useEffect(() => {
+    if (focusTimerView && embeddedIntro) {
+      timerPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [embeddedIntro, focusTimerView]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -505,6 +520,7 @@ export function TimerApp() {
     setIsPaused(false);
     setIsComplete(false);
     setActiveProgram(null);
+    setFocusTimerView(false);
     setCurrentPhaseIndex(0);
     setRemainingSeconds(phases[0]?.duration ?? 0);
     warnedCountdownsRef.current.clear();
@@ -535,6 +551,7 @@ export function TimerApp() {
     setIsComplete(false);
     setIsRunning(true);
     setIsPaused(false);
+    setFocusTimerView(embeddedIntro);
     warnedCountdownsRef.current.clear();
     cueEventsRef.current.clear();
     randomCueSetsRef.current = buildRandomCueSets(cleanProgram.sets);
@@ -561,6 +578,7 @@ export function TimerApp() {
 
     setIsRunning(true);
     setIsPaused(false);
+    setFocusTimerView(embeddedIntro);
     nextPhaseStartedAtRef.current = Date.now();
     endTimeRef.current = Date.now() + remainingSeconds * 1000;
   };
@@ -661,8 +679,15 @@ export function TimerApp() {
 
   return (
     <main className="py-8 md:py-10">
-      <div className="page-shell grid gap-6 lg:grid-cols-[0.98fr_1.02fr]">
-        <section className="glass-panel fade-up rounded-[2rem] p-6 sm:p-8">
+      <div
+        className={`page-shell grid gap-6 ${
+          embeddedIntro && focusTimerView
+            ? "max-w-4xl"
+            : "lg:grid-cols-[0.98fr_1.02fr]"
+        }`}
+      >
+        {!(embeddedIntro && focusTimerView) ? (
+          <section className="glass-panel fade-up rounded-[2rem] p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent-strong)]">
@@ -672,9 +697,11 @@ export function TimerApp() {
                 Build tonight&apos;s perfect interval
               </h1>
             </div>
-            <Link href="/" className="secondary-button">
-              Back to intro
-            </Link>
+            {embeddedIntro ? null : (
+              <Link href="/" className="secondary-button">
+                Back to intro
+              </Link>
+            )}
           </div>
 
           <div className="mt-6 rounded-[1.5rem] border border-white/70 bg-white/60 p-4">
@@ -804,9 +831,15 @@ export function TimerApp() {
               />
             </label>
           </div>
-        </section>
+          </section>
+        ) : null}
 
-        <section className="fade-up [animation-delay:120ms]">
+        <section
+          ref={timerPanelRef}
+          className={`fade-up [animation-delay:120ms] ${
+            embeddedIntro && focusTimerView ? "mx-auto w-full max-w-3xl" : ""
+          }`}
+        >
           <div
             className={`glass-panel timer-gradient rounded-[2rem] p-6 sm:p-8 ${getPhaseCardClass(
               currentPhase.kind,
@@ -821,8 +854,19 @@ export function TimerApp() {
                   {workoutProgram.name}
                 </h2>
               </div>
-              <div className="rounded-full border border-white/75 bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--berry)]">
-                {currentSetLabel}
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {embeddedIntro && focusTimerView ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setFocusTimerView(false)}
+                  >
+                    Edit workout
+                  </button>
+                ) : null}
+                <div className="rounded-full border border-white/75 bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--berry)]">
+                  {currentSetLabel}
+                </div>
               </div>
             </div>
 
