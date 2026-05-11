@@ -1,0 +1,15 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="1500" fill="#FDF0EA"/>
+  <rect x="70" y="70" width="1060" height="1360" rx="60" fill="url(#paint0_linear)"/>
+  <circle cx="600" cy="550" r="220" fill="#FFE6DD"/>
+  <path d="M470 860C470 728.072 576.954 621 709 621H491C623.046 621 730 728.072 730 860V991H470V860Z" fill="#FFD4D9"/>
+  <path d="M353 1112C353 1008.17 437.174 924 541 924H659C762.826 924 847 1008.17 847 1112V1235H353V1112Z" fill="#FFF7F0"/>
+  <text x="600" y="1180" text-anchor="middle" fill="#7A3E58" font-family="Georgia, serif" font-size="58">Replace with your favorite photo</text>
+  <text x="600" y="1260" text-anchor="middle" fill="#9E647B" font-family="Arial, sans-serif" font-size="34">public/images/girlfriend-photo.jpg</text>
+  <defs>
+    <linearGradient id="paint0_linear" x1="124" y1="130" x2="1002" y2="1364" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE7DA"/>
+      <stop offset="1" stop-color="#F7C8D6"/>
+    </linearGradient>
+  </defs>
+</svg>

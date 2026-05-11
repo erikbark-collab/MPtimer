@@ -1,0 +1,206 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fffaf6;
+  --foreground: #311f28;
+  --surface: rgba(255, 247, 241, 0.76);
+  --surface-strong: rgba(255, 250, 247, 0.9);
+  --line: rgba(112, 67, 88, 0.18);
+  --accent: #d05e7c;
+  --accent-strong: #a33d67;
+  --berry: #6f3651;
+  --gold: #d89f3d;
+  --mint: #dff3ea;
+  --warm-shadow: 0 24px 90px rgba(126, 62, 88, 0.18);
+  --font-dm-sans: "Aptos", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-playfair: "Georgia", "Times New Roman", serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-dm-sans);
+  --font-serif: var(--font-playfair);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top, rgba(255, 208, 221, 0.95), transparent 34%),
+    linear-gradient(180deg, #fffaf6 0%, #ffe9df 44%, #fff1ec 100%);
+}
+
+body {
+  color: var(--foreground);
+  font-family: var(--font-dm-sans), sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(255, 211, 225, 0.95), transparent 25%),
+    radial-gradient(circle at 80% 10%, rgba(255, 237, 183, 0.45), transparent 20%),
+    linear-gradient(180deg, #fff8f3 0%, #fff2ea 45%, #fffaf7 100%);
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(208, 94, 124, 0.2);
+}
+
+.page-shell {
+  width: min(1160px, calc(100vw - 2rem));
+  margin: 0 auto;
+}
+
+.glass-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--warm-shadow);
+  backdrop-filter: blur(20px);
+}
+
+.romance-gradient {
+  background:
+    radial-gradient(circle at top, rgba(255, 235, 203, 0.9), transparent 36%),
+    linear-gradient(135deg, rgba(250, 173, 194, 0.96), rgba(253, 244, 229, 0.92));
+}
+
+.timer-gradient {
+  background:
+    radial-gradient(circle at top, rgba(242, 194, 207, 0.85), transparent 35%),
+    linear-gradient(180deg, rgba(255, 251, 248, 0.92), rgba(255, 241, 233, 0.9));
+}
+
+.phase-work {
+  background: linear-gradient(140deg, rgba(208, 94, 124, 0.2), rgba(255, 225, 206, 0.78));
+}
+
+.phase-rest {
+  background: linear-gradient(140deg, rgba(192, 232, 214, 0.78), rgba(235, 248, 241, 0.96));
+}
+
+.phase-warmup {
+  background: linear-gradient(140deg, rgba(255, 226, 177, 0.8), rgba(255, 245, 220, 0.94));
+}
+
+.phase-cooldown,
+.phase-done {
+  background: linear-gradient(140deg, rgba(224, 214, 255, 0.72), rgba(249, 243, 255, 0.96));
+}
+
+.phase-complete {
+  border-color: rgba(72, 167, 113, 0.46);
+  background: linear-gradient(140deg, rgba(203, 244, 218, 0.96), rgba(239, 252, 244, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(126, 213, 161, 0.24),
+    0 16px 30px rgba(76, 161, 109, 0.14);
+}
+
+.phase-complete .phase-label {
+  color: #2f7a4d;
+}
+
+.phase-complete .phase-time {
+  color: rgba(47, 122, 77, 0.78);
+}
+
+.section-title {
+  font-family: var(--font-playfair), serif;
+  letter-spacing: -0.04em;
+}
+
+.soft-ring {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 18px 40px rgba(119, 53, 79, 0.12);
+}
+
+.field {
+  width: 100%;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(112, 67, 88, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.9rem 1rem;
+  color: var(--foreground);
+}
+
+.field:focus {
+  outline: 2px solid rgba(208, 94, 124, 0.35);
+  outline-offset: 1px;
+}
+
+.primary-button {
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: white;
+  padding: 0.95rem 1.4rem;
+  font-weight: 700;
+  box-shadow: 0 18px 30px rgba(163, 61, 103, 0.25);
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 35px rgba(163, 61, 103, 0.3);
+}
+
+.secondary-button {
+  border-radius: 999px;
+  border: 1px solid rgba(112, 67, 88, 0.16);
+  background: rgba(255, 255, 255, 0.66);
+  padding: 0.95rem 1.2rem;
+  font-weight: 700;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.92);
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.floating-heart {
+  position: absolute;
+  opacity: 0.3;
+  animation: drift 10s ease-in-out infinite;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(4deg);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: reveal 600ms ease both;
+}

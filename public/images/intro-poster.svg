@@ -1,0 +1,15 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" fill="#2D1823"/>
+  <circle cx="1033" cy="154" r="166" fill="#AF4C6E" fill-opacity="0.4"/>
+  <circle cx="244" cy="548" r="215" fill="#F3B85B" fill-opacity="0.18"/>
+  <rect x="135" y="108" width="1010" height="504" rx="44" fill="url(#paint0_linear)" stroke="#F9D2DC" stroke-width="2"/>
+  <path d="M563 284L778 360L563 436V284Z" fill="#FFF7F0"/>
+  <text x="640" y="185" text-anchor="middle" fill="#FFF7F0" font-family="Georgia, serif" font-size="58">Drop your intro video here</text>
+  <text x="640" y="524" text-anchor="middle" fill="#FFD9E1" font-family="Arial, sans-serif" font-size="32">public/video/intro.mp4</text>
+  <defs>
+    <linearGradient id="paint0_linear" x1="183" y1="150" x2="1106" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7A3E58"/>
+      <stop offset="1" stop-color="#CA6D87"/>
+    </linearGradient>
+  </defs>
+</svg>
