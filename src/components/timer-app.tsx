@@ -172,11 +172,15 @@ function createAudioEngine() {
     });
   };
 
-  const playFile = async (src: string, fallback?: () => Promise<void>) => {
+  const playFile = async (
+    src: string,
+    fallback?: () => Promise<void>,
+    volume = 0.9,
+  ) => {
     try {
       const audio = new Audio(src);
       audio.preload = "auto";
-      audio.volume = 0.9;
+      audio.volume = volume;
       await audio.play();
     } catch (error) {
       if (fallback) {
@@ -194,7 +198,12 @@ function createAudioEngine() {
 
   return {
     unlock,
-    playWarning: async () => playFile("/audio/warning-beep.mp3", playFallbackBeep),
+    playWarning: async () =>
+      playFile(
+        "/audio/warning-beep.mp3",
+        async () => playFile("/audio/go.wav", playFallbackBeep, 1),
+        1,
+      ),
     playStart: async () => playFile("/audio/start-voice.mp3"),
     playPhaseComplete: async () =>
       playFile("/audio/go.wav", playFallbackPhaseComplete),
@@ -1157,11 +1166,6 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               <div className="timer-digits section-title mt-4 text-7xl leading-none text-[var(--berry)] sm:text-[7.8rem]">
                 {formatClock(remainingSeconds)}
               </div>
-              <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[rgba(49,31,40,0.72)]">
-                A warning sound plays automatically at both two seconds and one
-                second left in each phase. Your own voice clips and cheer
-                tracks belong in <code>public/audio</code>.
-              </p>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
