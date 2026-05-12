@@ -36,6 +36,7 @@ const CUSTOM_CUE_FILES = {
   warmupCheer: "/audio/Warm up cheer.m4a",
   lastSet: "/audio/Last set.m4a",
   randomCheer: ["/audio/Random cheer.m4a", "/audio/Random cheer B.m4a"],
+  applause: "/audio/applause.mp3",
   goodJob: "/audio/Good job.m4a",
 } as const;
 
@@ -190,9 +191,46 @@ function createAudioEngine() {
     }
   };
 
+  const playFileAndWait = async (
+    src: string,
+    fallback?: () => Promise<void>,
+    volume = 0.9,
+  ) => {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const audio = new Audio(src);
+        audio.preload = "auto";
+        audio.volume = volume;
+        const cleanUp = () => {
+          audio.onended = null;
+          audio.onerror = null;
+        };
+
+        audio.onended = () => {
+          cleanUp();
+          resolve();
+        };
+        audio.onerror = () => {
+          cleanUp();
+          reject(new Error(`Could not play audio source ${src}.`));
+        };
+
+        void audio.play().catch((error) => {
+          cleanUp();
+          reject(error);
+        });
+      });
+    } catch (error) {
+      if (fallback) {
+        await fallback();
+      }
+      console.warn(`Could not play audio source ${src}.`, error);
+    }
+  };
+
   const playCueWithPlaceholder = async (src: string) => {
     await playFile(src, async () =>
-      playFile("/audio/go.wav", playFallbackPhaseComplete),
+      playFile("/audio/go.mp3", playFallbackPhaseComplete),
     );
   };
 
@@ -200,13 +238,17 @@ function createAudioEngine() {
     unlock,
     playWarning: async () =>
       playFile(
-        "/audio/warning-beep.mp3",
-        async () => playFile("/audio/go.wav", playFallbackBeep, 1),
+        "/audio/beep.mp3",
+        async () => playFile("/audio/go.mp3", playFallbackBeep, 1),
         1,
       ),
     playStart: async () => playFile("/audio/start-voice.mp3"),
     playPhaseComplete: async () =>
-      playFile("/audio/go.wav", playFallbackPhaseComplete),
+      playFile("/audio/go.mp3", playFallbackPhaseComplete, 1),
+    playCooldownCelebration: async () => {
+      await playFileAndWait(CUSTOM_CUE_FILES.applause);
+      await playCueWithPlaceholder(CUSTOM_CUE_FILES.goodJob);
+    },
     playCustomCue: async (src: string) => playCueWithPlaceholder(src),
     playCheer: async () => {
       const randomTrack =
@@ -475,7 +517,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
         !cueEventsRef.current.has("good-job")
       ) {
         cueEventsRef.current.add("good-job");
-        void audioEngineRef.current?.playCustomCue(CUSTOM_CUE_FILES.goodJob);
+        void audioEngineRef.current?.playCooldownCelebration();
       }
 
       if (
