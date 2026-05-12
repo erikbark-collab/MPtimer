@@ -68,6 +68,18 @@ function pickRandomCue(cues: readonly string[]) {
 
 function createAudioEngine() {
   let audioContext: AudioContext | null = null;
+  const audioCache = new Map<string, HTMLAudioElement>();
+  const unlockSources = [
+    "/audio/beep.mp3",
+    "/audio/go.mp3",
+    "/audio/applause.mp3",
+    "/audio/Come on three sets left.m4a",
+    "/audio/Warm up cheer.m4a",
+    "/audio/Last set.m4a",
+    "/audio/Random cheer.m4a",
+    "/audio/Random cheer B.m4a",
+    "/audio/Good job.m4a",
+  ];
 
   const getContext = async () => {
     const Context =
@@ -90,18 +102,46 @@ function createAudioEngine() {
 
   const unlock = async () => {
     const context = await getContext();
-    if (!context) {
-      return;
+    if (context) {
+      const buffer = context.createBuffer(1, 1, context.sampleRate);
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      gain.gain.value = 0.0001;
+      source.buffer = buffer;
+      source.connect(gain);
+      gain.connect(context.destination);
+      source.start();
     }
 
-    const buffer = context.createBuffer(1, 1, context.sampleRate);
-    const source = context.createBufferSource();
-    const gain = context.createGain();
-    gain.gain.value = 0.0001;
-    source.buffer = buffer;
-    source.connect(gain);
-    gain.connect(context.destination);
-    source.start();
+    await Promise.allSettled(
+      unlockSources.map(async (src) => {
+        const audio = getAudio(src);
+        audio.muted = true;
+        try {
+          await audio.play();
+          audio.pause();
+          audio.currentTime = 0;
+        } catch {
+          // Ignore warm-up failures and let later playback attempts retry.
+        } finally {
+          audio.muted = false;
+        }
+      }),
+    );
+  };
+
+  const getAudio = (src: string) => {
+    const cached = audioCache.get(src);
+    if (cached) {
+      return cached;
+    }
+
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.setAttribute("playsinline", "true");
+    audio.load();
+    audioCache.set(src, audio);
+    return audio;
   };
 
   const playFallbackBeep = async () => {
@@ -179,8 +219,9 @@ function createAudioEngine() {
     volume = 0.9,
   ) => {
     try {
-      const audio = new Audio(src);
-      audio.preload = "auto";
+      const audio = getAudio(src);
+      audio.pause();
+      audio.currentTime = 0;
       audio.volume = volume;
       await audio.play();
     } catch (error) {
@@ -198,8 +239,9 @@ function createAudioEngine() {
   ) => {
     try {
       await new Promise<void>((resolve, reject) => {
-        const audio = new Audio(src);
-        audio.preload = "auto";
+        const audio = getAudio(src);
+        audio.pause();
+        audio.currentTime = 0;
         audio.volume = volume;
         const cleanUp = () => {
           audio.onended = null;
@@ -360,6 +402,29 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   const workoutProgram = activeProgram ?? previewProgram;
   const phases = useMemo(() => buildWorkoutPhases(workoutProgram), [workoutProgram]);
   const currentPhase = phases[currentPhaseIndex] ?? phases[phases.length - 1];
+  const totalWorkoutSeconds = useMemo(
+    () =>
+      phases
+        .filter((phase) => phase.kind !== "done")
+        .reduce((sum, phase) => sum + phase.duration, 0),
+    [phases],
+  );
+  const elapsedWorkoutSeconds = useMemo(() => {
+    if (currentPhase.kind === "done") {
+      return totalWorkoutSeconds;
+    }
+
+    const completedSeconds = phases
+      .slice(0, currentPhaseIndex)
+      .filter((phase) => phase.kind !== "done")
+      .reduce((sum, phase) => sum + phase.duration, 0);
+
+    return completedSeconds + Math.max(0, currentPhase.duration - remainingSeconds);
+  }, [currentPhase.duration, currentPhase.kind, currentPhaseIndex, phases, remainingSeconds, totalWorkoutSeconds]);
+  const workoutProgressPercent =
+    totalWorkoutSeconds > 0
+      ? Math.min(100, Math.max(0, Math.round((elapsedWorkoutSeconds / totalWorkoutSeconds) * 100)))
+      : 0;
   const currentSetLabel =
     currentPhase.kind === "work" || currentPhase.kind === "rest"
       ? `Set ${currentPhase.set} of ${workoutProgram.sets}`
@@ -1207,6 +1272,18 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               </p>
               <div className="timer-digits section-title mt-4 text-7xl leading-none text-[var(--berry)] sm:text-[7.8rem]">
                 {formatClock(remainingSeconds)}
+              </div>
+              <div className="mx-auto mt-5 max-w-md">
+                <div className="flex items-center justify-between text-sm font-semibold text-[var(--berry)]">
+                  <span>Workout progress</span>
+                  <span>{workoutProgressPercent}%</span>
+                </div>
+                <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/55">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] transition-[width] duration-500"
+                    style={{ width: `${workoutProgressPercent}%` }}
+                  />
+                </div>
               </div>
             </div>
 
