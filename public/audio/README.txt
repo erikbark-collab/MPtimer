@@ -10,6 +10,7 @@ Add your custom audio files here:
 - Warm up cheer.m4a
 - Last set.m4a
 - Random cheer.m4a
+- Random cheer B.m4a
 - Good job.m4a
 
 If `warning-beep.mp3` is missing, the app falls back to a generated beep.

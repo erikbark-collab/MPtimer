@@ -23,6 +23,8 @@ type ProgramsResponse = {
   message?: string;
 };
 
+const NO_CHEERING_SOUNDS_KEY = "tabata-timer:no-cheering-sounds";
+
 const CHEER_TRACKS = [
   "/audio/cheer-1.mp3",
   "/audio/cheer-2.mp3",
@@ -33,7 +35,7 @@ const CUSTOM_CUE_FILES = {
   threeSetsLeft: "/audio/Come on three sets left.m4a",
   warmupCheer: "/audio/Warm up cheer.m4a",
   lastSet: "/audio/Last set.m4a",
-  randomCheer: "/audio/Random cheer.m4a",
+  randomCheer: ["/audio/Random cheer.m4a", "/audio/Random cheer B.m4a"],
   goodJob: "/audio/Good job.m4a",
 } as const;
 
@@ -57,6 +59,10 @@ function toDraft(program: WorkoutProgram): ProgramDraft {
     sets: program.sets,
     cooldownSeconds: program.cooldownSeconds,
   };
+}
+
+function pickRandomCue(cues: readonly string[]) {
+  return cues[Math.floor(Math.random() * cues.length)];
 }
 
 function createAudioEngine() {
@@ -226,6 +232,13 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   );
   const [activeProgram, setActiveProgram] = useState<WorkoutProgram | null>(null);
   const [focusTimerView, setFocusTimerView] = useState(false);
+  const [noCheeringSounds, setNoCheeringSounds] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(NO_CHEERING_SOUNDS_KEY) === "true";
+  });
 
   const audioEngineRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
   const phasesRef = useRef<WorkoutPhase[]>(buildWorkoutPhases(DEFAULT_PROGRAM));
@@ -335,6 +348,13 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   }, [selectedProgramId]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      NO_CHEERING_SOUNDS_KEY,
+      noCheeringSounds ? "true" : "false",
+    );
+  }, [noCheeringSounds]);
+
+  useEffect(() => {
     if (focusTimerView && embeddedIntro) {
       timerPanelRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -347,6 +367,8 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     if (!isRunning) {
       return;
     }
+
+    const canPlayM4a = !noCheeringSounds;
 
     syncTimerRef.current = window.setInterval(() => {
       const phaseList = phasesRef.current;
@@ -386,6 +408,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       if (
         phase.kind === "warmup" &&
         secondsLeft === 10 &&
+        canPlayM4a &&
         !cueEventsRef.current.has("warmup-cheer")
       ) {
         cueEventsRef.current.add("warmup-cheer");
@@ -396,6 +419,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
         phase.kind === "rest" &&
         phase.set === workoutProgram.sets - 3 &&
         secondsLeft === phase.duration &&
+        canPlayM4a &&
         !cueEventsRef.current.has("three-sets-left")
       ) {
         cueEventsRef.current.add("three-sets-left");
@@ -407,6 +431,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
         workoutProgram.sets > 1 &&
         phase.set === workoutProgram.sets - 1 &&
         secondsLeft === Math.min(10, phase.duration) &&
+        canPlayM4a &&
         !cueEventsRef.current.has("last-set")
       ) {
         cueEventsRef.current.add("last-set");
@@ -416,6 +441,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       if (
         phase.kind === "cooldown" &&
         secondsLeft === phase.duration &&
+        canPlayM4a &&
         !cueEventsRef.current.has("good-job")
       ) {
         cueEventsRef.current.add("good-job");
@@ -425,13 +451,16 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       if (
         phase.kind === "work" &&
         typeof phase.set === "number" &&
+        canPlayM4a &&
         randomCueSetsRef.current.has(phase.set) &&
         !cueEventsRef.current.has(`random-cheer-${phase.set}`) &&
         timeSincePhaseStart > 2000 &&
         secondsLeft > 3
       ) {
         cueEventsRef.current.add(`random-cheer-${phase.set}`);
-        void audioEngineRef.current?.playCustomCue(CUSTOM_CUE_FILES.randomCheer);
+        void audioEngineRef.current?.playCustomCue(
+          pickRandomCue(CUSTOM_CUE_FILES.randomCheer),
+        );
       }
 
       if (secondsLeft <= 0) {
@@ -464,7 +493,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
         window.clearInterval(syncTimerRef.current);
       }
     };
-  }, [currentPhaseIndex, isRunning, workoutProgram]);
+  }, [currentPhaseIndex, isRunning, noCheeringSounds, workoutProgram]);
 
   const handleProgramPick = (programId: string) => {
     const nextProgram =
@@ -733,6 +762,19 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
                 {draft.id ? "Update workout" : "Save new workout"}
               </button>
             </div>
+            <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-[var(--berry)]">
+              <input
+                type="checkbox"
+                checked={noCheeringSounds}
+                onChange={(event) => setNoCheeringSounds(event.target.checked)}
+                className="h-4 w-4 accent-[var(--accent-strong)]"
+              />
+              <span>No cheering sounds</span>
+            </label>
+            <p className="mt-2 text-sm text-[rgba(49,31,40,0.66)]">
+              Disables all recorded <code>.m4a</code> voice and cheering clips while
+              keeping timer sounds active.
+            </p>
             {!persistenceEnabled ? (
               <p className="mt-3 text-sm text-[rgba(49,31,40,0.66)]">
                 Supabase is not configured yet, so cloud saving is temporarily
@@ -870,11 +912,11 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               </div>
             </div>
 
-            <div className="mt-8 rounded-[2rem] border border-white/80 bg-white/70 px-6 py-8 text-center soft-ring">
+            <div className="timer-stage mt-8 rounded-[2rem] border border-white/80 px-6 py-8 text-center soft-ring">
               <p className="text-base font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
                 {currentPhase.label}
               </p>
-              <div className="section-title mt-4 text-7xl leading-none text-[var(--berry)] sm:text-[7.8rem]">
+              <div className="timer-digits section-title mt-4 text-7xl leading-none text-[var(--berry)] sm:text-[7.8rem]">
                 {formatClock(remainingSeconds)}
               </div>
               <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[rgba(49,31,40,0.72)]">
