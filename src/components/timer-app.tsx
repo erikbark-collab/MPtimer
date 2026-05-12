@@ -87,6 +87,22 @@ function createAudioEngine() {
     return audioContext;
   };
 
+  const unlock = async () => {
+    const context = await getContext();
+    if (!context) {
+      return;
+    }
+
+    const buffer = context.createBuffer(1, 1, context.sampleRate);
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    gain.gain.value = 0.0001;
+    source.buffer = buffer;
+    source.connect(gain);
+    gain.connect(context.destination);
+    source.start();
+  };
+
   const playFallbackBeep = async () => {
     const context = await getContext();
     if (!context) {
@@ -177,6 +193,7 @@ function createAudioEngine() {
   };
 
   return {
+    unlock,
     playWarning: async () => playFile("/audio/warning-beep.mp3", playFallbackBeep),
     playStart: async () => playFile("/audio/start-voice.mp3"),
     playPhaseComplete: async () =>
@@ -222,6 +239,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [persistenceEnabled, setPersistenceEnabled] = useState(false);
   const [isSaving, startSavingTransition] = useTransition();
+  const [isDeleting, startDeletingTransition] = useTransition();
   const [loadingPrograms, setLoadingPrograms] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -232,6 +250,8 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
   );
   const [activeProgram, setActiveProgram] = useState<WorkoutProgram | null>(null);
   const [focusTimerView, setFocusTimerView] = useState(false);
+  const [showWorkoutStudio, setShowWorkoutStudio] = useState(false);
+  const [showMartasWorkouts, setShowMartasWorkouts] = useState(false);
   const [noCheeringSounds, setNoCheeringSounds] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -295,6 +315,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       : currentPhase.kind === "done"
         ? "Done"
         : "Getting ready";
+  const showManagementPanels = showWorkoutStudio || showMartasWorkouts;
 
   useEffect(() => {
     phasesRef.current = phases;
@@ -559,6 +580,23 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     endTimeRef.current = null;
   };
 
+  const openMartasWorkouts = () => {
+    setShowMartasWorkouts(true);
+    setShowWorkoutStudio(false);
+    setFocusTimerView(false);
+  };
+
+  const openWorkoutStudio = () => {
+    setShowWorkoutStudio(true);
+    setShowMartasWorkouts(false);
+    setFocusTimerView(false);
+  };
+
+  const hideManagementPanels = () => {
+    setShowWorkoutStudio(false);
+    setShowMartasWorkouts(false);
+  };
+
   const startWorkout = async () => {
     const cleanProgram = clampProgram(previewProgram);
     const nextPhases = buildWorkoutPhases(cleanProgram);
@@ -581,13 +619,15 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     setIsRunning(true);
     setIsPaused(false);
     setFocusTimerView(embeddedIntro);
+    hideManagementPanels();
     warnedCountdownsRef.current.clear();
     cueEventsRef.current.clear();
     randomCueSetsRef.current = buildRandomCueSets(cleanProgram.sets);
     nextPhaseStartedAtRef.current = Date.now();
     endTimeRef.current = Date.now() + (nextPhases[0]?.duration ?? 0) * 1000;
-    cheerDeadlineRef.current = Date.now() + (12000 + Math.random() * 9000);
+    cheerDeadlineRef.current = Date.now() + (12000 + Math.random() * 12000);
 
+    await audioEngineRef.current?.unlock();
     await audioEngineRef.current?.playStart();
   };
 
@@ -605,11 +645,14 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       return;
     }
 
-    setIsRunning(true);
-    setIsPaused(false);
-    setFocusTimerView(embeddedIntro);
-    nextPhaseStartedAtRef.current = Date.now();
-    endTimeRef.current = Date.now() + remainingSeconds * 1000;
+    void (async () => {
+      await audioEngineRef.current?.unlock();
+      setIsRunning(true);
+      setIsPaused(false);
+      setFocusTimerView(embeddedIntro);
+      nextPhaseStartedAtRef.current = Date.now();
+      endTimeRef.current = Date.now() + remainingSeconds * 1000;
+    })();
   };
 
   const saveProgram = () => {
@@ -662,11 +705,58 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
           setSelectedProgramId(savedProgram.id);
           setDraft(toDraft(savedProgram));
           setStatusMessage("Workout saved.");
+          hideManagementPanels();
         } catch (error) {
           setStatusMessage(
             error instanceof Error
               ? error.message
               : "Could not save the workout right now.",
+          );
+        }
+      })();
+    });
+  };
+
+  const deleteProgram = () => {
+    if (
+      !persistenceEnabled ||
+      !selectedProgramId ||
+      selectedProgramId === DEFAULT_PROGRAM.id
+    ) {
+      return;
+    }
+
+    startDeletingTransition(() => {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/programs/${selectedProgramId}`, {
+            method: "DELETE",
+          });
+          const data = (await response.json()) as { error?: string };
+
+          if (!response.ok) {
+            throw new Error(data.error ?? "Delete failed");
+          }
+
+          const nextPrograms = programs.filter(
+            (program) => program.id !== selectedProgramId,
+          );
+          const fallbackProgram = nextPrograms[0] ?? DEFAULT_PROGRAM;
+
+          setPrograms(nextPrograms.length > 0 ? nextPrograms : [DEFAULT_PROGRAM]);
+          setSelectedProgramId(fallbackProgram.id);
+          setDraft(toDraft(fallbackProgram));
+          setStatusMessage("Workout deleted.");
+          setShowMartasWorkouts(true);
+          setIsRunning(false);
+          setIsPaused(false);
+          setIsComplete(false);
+          setActiveProgram(null);
+        } catch (error) {
+          setStatusMessage(
+            error instanceof Error
+              ? error.message
+              : "Could not delete the workout right now.",
           );
         }
       })();
@@ -688,6 +778,8 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     setIsPaused(false);
     setIsComplete(false);
     setActiveProgram(null);
+    setShowWorkoutStudio(true);
+    setShowMartasWorkouts(false);
     setCurrentPhaseIndex(0);
     setRemainingSeconds(
       buildWorkoutPhases(
@@ -710,169 +802,278 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     <main className="py-8 md:py-10">
       <div
         className={`page-shell grid gap-6 ${
-          embeddedIntro && focusTimerView
-            ? "max-w-4xl"
-            : "lg:grid-cols-[0.98fr_1.02fr]"
+          showManagementPanels && !(embeddedIntro && focusTimerView)
+            ? "lg:grid-cols-[0.82fr_1.18fr]"
+            : "max-w-4xl"
         }`}
       >
-        {!(embeddedIntro && focusTimerView) ? (
-          <section className="glass-panel fade-up rounded-[2rem] p-6 sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
+        {showManagementPanels && !(embeddedIntro && focusTimerView) ? (
+          <section className="fade-up flex flex-col gap-6">
+            <div className="glass-panel rounded-[2rem] p-6 sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent-strong)]">
-                Workout Studio
+                Märtzor Exercise Timer
               </p>
-              <h1 className="section-title mt-2 text-4xl text-[var(--berry)] sm:text-5xl">
-                Build tonight&apos;s perfect interval
+              <h1 className="section-title mt-3 text-4xl text-[var(--berry)] sm:text-5xl">
+                Build, save, and run your favorite intervals
               </h1>
-            </div>
-            {embeddedIntro ? null : (
-              <Link href="/" className="secondary-button">
-                Back to intro
-              </Link>
-            )}
-          </div>
-
-          <div className="mt-6 rounded-[1.5rem] border border-white/70 bg-white/60 p-4">
-            <label className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-              Saved workouts
-            </label>
-            <select
-              className="field"
-              value={selectedProgramId}
-              onChange={(event) => handleProgramPick(event.target.value)}
-              disabled={loadingPrograms}
-            >
-              {programs.map((program) => (
-                <option key={program.id} value={program.id}>
-                  {program.name}
-                </option>
-              ))}
-            </select>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button type="button" className="secondary-button" onClick={startNewProgram}>
-                New workout
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={saveProgram}
-                disabled={isSaving || !persistenceEnabled}
-              >
-                {draft.id ? "Update workout" : "Save new workout"}
-              </button>
-            </div>
-            <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-[var(--berry)]">
-              <input
-                type="checkbox"
-                checked={noCheeringSounds}
-                onChange={(event) => setNoCheeringSounds(event.target.checked)}
-                className="h-4 w-4 accent-[var(--accent-strong)]"
-              />
-              <span>No cheering sounds</span>
-            </label>
-            <p className="mt-2 text-sm text-[rgba(49,31,40,0.66)]">
-              Disables all recorded <code>.m4a</code> voice and cheering clips while
-              keeping timer sounds active.
-            </p>
-            {!persistenceEnabled ? (
-              <p className="mt-3 text-sm text-[rgba(49,31,40,0.66)]">
-                Supabase is not configured yet, so cloud saving is temporarily
-                disabled. The timer still works with the default workout.
+              <p className="mt-4 max-w-lg text-base leading-7 text-[rgba(49,31,40,0.78)]">
+                Choose a saved workout, jump straight into the active timer, or
+                open the builder when you want to create something new.
               </p>
-            ) : null}
-            {statusMessage ? (
-              <p className="mt-3 text-sm text-[rgba(49,31,40,0.74)]">
-                {statusMessage}
-              </p>
-            ) : null}
-          </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Name
-              </span>
-              <input
-                className="field"
-                value={draft.name}
-                onChange={(event) => handleDraftChange("name", event.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Sets
-              </span>
-              <input
-                className="field"
-                type="number"
-                min={1}
-                max={30}
-                value={draft.sets}
-                onChange={(event) => handleDraftChange("sets", event.target.value, true)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Warmup (sec)
-              </span>
-              <input
-                className="field"
-                type="number"
-                min={0}
-                max={1800}
-                value={draft.warmupSeconds}
-                onChange={(event) =>
-                  handleDraftChange("warmupSeconds", event.target.value, true)
-                }
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Work (sec)
-              </span>
-              <input
-                className="field"
-                type="number"
-                min={1}
-                max={1800}
-                value={draft.workSeconds}
-                onChange={(event) =>
-                  handleDraftChange("workSeconds", event.target.value, true)
-                }
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Rest (sec)
-              </span>
-              <input
-                className="field"
-                type="number"
-                min={0}
-                max={1800}
-                value={draft.restSeconds}
-                onChange={(event) =>
-                  handleDraftChange("restSeconds", event.target.value, true)
-                }
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
-                Cooldown (sec)
-              </span>
-              <input
-                className="field"
-                type="number"
-                min={0}
-                max={1800}
-                value={draft.cooldownSeconds}
-                onChange={(event) =>
-                  handleDraftChange("cooldownSeconds", event.target.value, true)
-                }
-              />
-            </label>
-          </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={openMartasWorkouts}
+                >
+                  Märtas Workouts
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={openWorkoutStudio}
+                >
+                  Build workout
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={hideManagementPanels}
+                >
+                  Hide panels
+                </button>
+                {!embeddedIntro ? (
+                  <Link href="/" className="secondary-button">
+                    Back to intro
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+
+            {showMartasWorkouts ? (
+              <section className="glass-panel rounded-[2rem] p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="section-title text-3xl text-[var(--berry)]">
+                      Märtas Workouts
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-[rgba(49,31,40,0.7)]">
+                      Pick a saved workout, then start it from the active timer.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-[1.5rem] border border-white/70 bg-white/60 p-4">
+                  <label className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                    Saved workouts
+                  </label>
+                  <select
+                    className="field"
+                    value={selectedProgramId}
+                    onChange={(event) => handleProgramPick(event.target.value)}
+                    disabled={loadingPrograms}
+                  >
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={hideManagementPanels}
+                    >
+                      Use this workout
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setDraft(toDraft(selectedProgram));
+                        openWorkoutStudio();
+                      }}
+                    >
+                      Edit selected
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={deleteProgram}
+                      disabled={
+                        isDeleting ||
+                        !persistenceEnabled ||
+                        selectedProgramId === DEFAULT_PROGRAM.id
+                      }
+                    >
+                      Delete workout
+                    </button>
+                  </div>
+                  {selectedProgramId === DEFAULT_PROGRAM.id ? (
+                    <p className="mt-3 text-sm text-[rgba(49,31,40,0.66)]">
+                      The default workout cannot be deleted.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
+            {showWorkoutStudio ? (
+              <section className="glass-panel rounded-[2rem] p-6 sm:p-8">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent-strong)]">
+                      Workout Studio
+                    </p>
+                    <h2 className="section-title mt-2 text-4xl text-[var(--berry)]">
+                      Build tonight&apos;s perfect interval
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setShowWorkoutStudio(false)}
+                  >
+                    Hide studio
+                  </button>
+                </div>
+
+                <div className="mt-6 rounded-[1.5rem] border border-white/70 bg-white/60 p-4">
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={startNewProgram}
+                    >
+                      New workout
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={saveProgram}
+                      disabled={isSaving || !persistenceEnabled}
+                    >
+                      {draft.id ? "Update workout" : "Save new workout"}
+                    </button>
+                  </div>
+                  <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-[var(--berry)]">
+                    <input
+                      type="checkbox"
+                      checked={noCheeringSounds}
+                      onChange={(event) => setNoCheeringSounds(event.target.checked)}
+                      className="h-4 w-4 accent-[var(--accent-strong)]"
+                    />
+                    <span>No cheering sounds</span>
+                  </label>
+                  <p className="mt-2 text-sm text-[rgba(49,31,40,0.66)]">
+                    Disables all recorded <code>.m4a</code> voice and cheering
+                    clips while keeping timer sounds active.
+                  </p>
+                  {!persistenceEnabled ? (
+                    <p className="mt-3 text-sm text-[rgba(49,31,40,0.66)]">
+                      Supabase is not configured yet, so cloud saving is
+                      temporarily disabled. The timer still works with the
+                      default workout.
+                    </p>
+                  ) : null}
+                  {statusMessage ? (
+                    <p className="mt-3 text-sm text-[rgba(49,31,40,0.74)]">
+                      {statusMessage}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Name
+                    </span>
+                    <input
+                      className="field"
+                      value={draft.name}
+                      onChange={(event) => handleDraftChange("name", event.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Sets
+                    </span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={draft.sets}
+                      onChange={(event) =>
+                        handleDraftChange("sets", event.target.value, true)
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Warmup (sec)
+                    </span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={0}
+                      max={1800}
+                      value={draft.warmupSeconds}
+                      onChange={(event) =>
+                        handleDraftChange("warmupSeconds", event.target.value, true)
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Work (sec)
+                    </span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={1}
+                      max={1800}
+                      value={draft.workSeconds}
+                      onChange={(event) =>
+                        handleDraftChange("workSeconds", event.target.value, true)
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Rest (sec)
+                    </span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={0}
+                      max={1800}
+                      value={draft.restSeconds}
+                      onChange={(event) =>
+                        handleDraftChange("restSeconds", event.target.value, true)
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                      Cooldown (sec)
+                    </span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={0}
+                      max={1800}
+                      value={draft.cooldownSeconds}
+                      onChange={(event) =>
+                        handleDraftChange("cooldownSeconds", event.target.value, true)
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : null}
           </section>
         ) : null}
 
@@ -887,6 +1088,11 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               currentPhase.kind,
             )}`}
           >
+            <div className="mb-4">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent-strong)]">
+                Märtzor Exercise Timer
+              </p>
+            </div>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent-strong)]">
@@ -897,19 +1103,51 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
-                {embeddedIntro && focusTimerView ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={openMartasWorkouts}
+                >
+                  Märtas Workouts
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={openWorkoutStudio}
+                >
+                  Build workout
+                </button>
+                {showManagementPanels ? (
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => setFocusTimerView(false)}
+                    onClick={hideManagementPanels}
                   >
-                    Edit workout
+                    Hide panels
                   </button>
                 ) : null}
                 <div className="rounded-full border border-white/75 bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--berry)]">
                   {currentSetLabel}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-6 rounded-[1.5rem] border border-white/70 bg-white/60 p-4">
+              <label className="mb-2 block text-sm font-semibold text-[var(--berry)]">
+                Workout to run
+              </label>
+              <select
+                className="field"
+                value={selectedProgramId}
+                onChange={(event) => handleProgramPick(event.target.value)}
+                disabled={loadingPrograms || isRunning}
+              >
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="timer-stage mt-8 rounded-[2rem] border border-white/80 px-6 py-8 text-center soft-ring">
@@ -922,8 +1160,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[rgba(49,31,40,0.72)]">
                 A warning sound plays automatically at both two seconds and one
                 second left in each phase. Your own voice clips and cheer
-                tracks belong in{" "}
-                <code>public/audio</code>.
+                tracks belong in <code>public/audio</code>.
               </p>
             </div>
 
@@ -948,6 +1185,12 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
               <p className="mt-4 rounded-[1.25rem] border border-white/75 bg-white/65 px-4 py-3 text-sm font-semibold text-[var(--berry)]">
                 Workout complete. Time for water, a high five, and maybe one
                 extra hug.
+              </p>
+            ) : null}
+
+            {statusMessage ? (
+              <p className="mt-4 text-sm text-[rgba(49,31,40,0.74)]">
+                {statusMessage}
               </p>
             ) : null}
 

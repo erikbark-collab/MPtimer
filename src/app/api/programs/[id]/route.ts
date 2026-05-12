@@ -71,3 +71,30 @@ export async function PUT(
 
   return NextResponse.json({ program: mapProgram(data as DatabaseProgram) });
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase is not configured yet." },
+      { status: 503 },
+    );
+  }
+
+  const { id } = await context.params;
+
+  const { error } = await supabase.from("workout_programs").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Could not delete the selected workout." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}

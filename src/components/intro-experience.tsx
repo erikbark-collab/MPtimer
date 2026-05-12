@@ -18,7 +18,7 @@ export function IntroExperience() {
                 Intro video
               </p>
               <h1 className="section-title mt-2 text-4xl text-[var(--berry)] sm:text-5xl">
-                For my favorite workout partner
+                Märtzor Exercise Timer
               </h1>
             </div>
             <div className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-[var(--berry)]">
