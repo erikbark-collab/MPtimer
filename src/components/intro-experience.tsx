@@ -7,21 +7,33 @@ import { TimerApp } from "@/components/timer-app";
 const INTRO_VIDEOS = ["/video/M IS HERE.mp4", "/video/M IS HERE 2.mp4"];
 const INTRO_POSTER = "/images/slutbild.jpeg";
 const FANFARE_SRC = "/audio/fanfare.mp3";
+const INTRO_MUSIC_OFF_KEY = "tabata-timer:intro-music-off";
 
 export function IntroExperience() {
   const [introVideo] = useState(() => {
     const randomIndex = Math.floor(Math.random() * INTRO_VIDEOS.length);
     return INTRO_VIDEOS[randomIndex];
   });
+  const [introMusicOff, setIntroMusicOff] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(INTRO_MUSIC_OFF_KEY) === "true";
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fanfareStartedRef = useRef(false);
 
   useEffect(() => {
-    let fadeTimeout: number | null = null;
-    let fadeInterval: number | null = null;
+    window.localStorage.setItem(
+      INTRO_MUSIC_OFF_KEY,
+      introMusicOff ? "true" : "false",
+    );
+  }, [introMusicOff]);
 
+  useEffect(() => {
     const startFanfare = async () => {
-      if (fanfareStartedRef.current) {
+      if (introMusicOff || fanfareStartedRef.current) {
         return;
       }
 
@@ -35,31 +47,19 @@ export function IntroExperience() {
 
       try {
         await audio.play();
-
-        fadeTimeout = window.setTimeout(() => {
-          const fadeSteps = 16;
-          const fadeDurationMs = 2500;
-          const volumeStep = audio.volume / fadeSteps;
-          let stepsRemaining = fadeSteps;
-
-          fadeInterval = window.setInterval(() => {
-            stepsRemaining -= 1;
-            audio.volume = Math.max(0, audio.volume - volumeStep);
-
-            if (stepsRemaining <= 0) {
-              if (fadeInterval) {
-                window.clearInterval(fadeInterval);
-              }
-              audio.pause();
-              audio.currentTime = 0;
-              audio.volume = 0.9;
-            }
-          }, fadeDurationMs / fadeSteps);
-        }, 5500);
       } catch {
         fanfareStartedRef.current = false;
       }
     };
+
+    if (introMusicOff) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      fanfareStartedRef.current = false;
+      return;
+    }
 
     void startFanfare();
 
@@ -78,18 +78,14 @@ export function IntroExperience() {
       window.removeEventListener("pointerdown", unlockAndStart);
       window.removeEventListener("touchstart", unlockAndStart);
       window.removeEventListener("keydown", unlockAndStart);
+    };
+  }, [introMusicOff]);
 
-      if (fadeTimeout) {
-        window.clearTimeout(fadeTimeout);
-      }
-      if (fadeInterval) {
-        window.clearInterval(fadeInterval);
-      }
-
+  useEffect(() => {
+    return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
-        audioRef.current.volume = 0.9;
       }
     };
   }, []);
@@ -103,10 +99,19 @@ export function IntroExperience() {
 
       <section className="page-shell mb-6">
         <div className="glass-panel romance-gradient fade-up overflow-hidden rounded-[2rem] p-4 sm:p-6">
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <h1 className="section-title text-4xl text-[var(--berry)] sm:text-5xl">
               Märtzor Exercise Timer
             </h1>
+            <label className="flex items-center gap-3 rounded-full bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--berry)]">
+              <input
+                type="checkbox"
+                checked={introMusicOff}
+                onChange={(event) => setIntroMusicOff(event.target.checked)}
+                className="h-4 w-4 accent-[var(--accent-strong)]"
+              />
+              <span>Turn off intro music</span>
+            </label>
           </div>
 
           <video
