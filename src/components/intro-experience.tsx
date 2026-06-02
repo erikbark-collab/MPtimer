@@ -9,6 +9,20 @@ const INTRO_POSTER = "/images/slutbild.jpeg";
 const FANFARE_SRC = "/audio/fanfare.mp3";
 const INTRO_MUSIC_OFF_KEY = "tabata-timer:intro-music-off";
 
+type AudioSessionType =
+  | "auto"
+  | "playback"
+  | "transient"
+  | "transient-solo"
+  | "ambient"
+  | "play-and-record";
+
+type NavigatorWithAudioSession = Navigator & {
+  audioSession?: {
+    type: AudioSessionType;
+  };
+};
+
 export function IntroExperience() {
   const [introVideo] = useState(() => {
     const randomIndex = Math.floor(Math.random() * INTRO_VIDEOS.length);
@@ -44,6 +58,15 @@ export function IntroExperience() {
       audio.preload = "auto";
       audio.currentTime = 0;
       audio.volume = 0.9;
+
+      try {
+        const audioSession = (navigator as NavigatorWithAudioSession).audioSession;
+        if (audioSession) {
+          audioSession.type = "ambient";
+        }
+      } catch {
+        // Ignore unsupported audio session APIs.
+      }
 
       try {
         await audio.play();

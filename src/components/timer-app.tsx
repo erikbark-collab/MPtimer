@@ -23,6 +23,14 @@ type ProgramsResponse = {
   message?: string;
 };
 
+type AudioSessionType =
+  | "auto"
+  | "playback"
+  | "transient"
+  | "transient-solo"
+  | "ambient"
+  | "play-and-record";
+
 const NO_CHEERING_SOUNDS_KEY = "tabata-timer:no-cheering-sounds";
 
 const CHEER_TRACKS = [
@@ -66,6 +74,12 @@ function pickRandomCue(cues: readonly string[]) {
   return cues[Math.floor(Math.random() * cues.length)];
 }
 
+type NavigatorWithAudioSession = Navigator & {
+  audioSession?: {
+    type: AudioSessionType;
+  };
+};
+
 function createAudioEngine() {
   let audioContext: AudioContext | null = null;
   const audioCache = new Map<string, HTMLAudioElement>();
@@ -80,6 +94,17 @@ function createAudioEngine() {
     "/audio/Random cheer B.m4a",
     "/audio/Good job.m4a",
   ];
+  const audioSession = (navigator as NavigatorWithAudioSession).audioSession;
+
+  const setAudioSessionType = (type: AudioSessionType) => {
+    try {
+      if (audioSession) {
+        audioSession.type = type;
+      }
+    } catch {
+      // Ignore unsupported or rejected audio session changes.
+    }
+  };
 
   const getContext = async () => {
     const Context =
@@ -101,6 +126,8 @@ function createAudioEngine() {
   };
 
   const unlock = async () => {
+    setAudioSessionType("ambient");
+
     const context = await getContext();
     if (context) {
       const buffer = context.createBuffer(1, 1, context.sampleRate);
@@ -217,8 +244,10 @@ function createAudioEngine() {
     src: string,
     fallback?: () => Promise<void>,
     volume = 0.9,
+    sessionType: "ambient" | "transient" = "transient",
   ) => {
     try {
+      setAudioSessionType(sessionType);
       const audio = getAudio(src);
       audio.pause();
       audio.currentTime = 0;
@@ -236,8 +265,10 @@ function createAudioEngine() {
     src: string,
     fallback?: () => Promise<void>,
     volume = 0.9,
+    sessionType: "ambient" | "transient" = "transient",
   ) => {
     try {
+      setAudioSessionType(sessionType);
       await new Promise<void>((resolve, reject) => {
         const audio = getAudio(src);
         audio.pause();
@@ -272,7 +303,9 @@ function createAudioEngine() {
 
   const playCueWithPlaceholder = async (src: string) => {
     await playFile(src, async () =>
-      playFile("/audio/go.mp3", playFallbackPhaseComplete),
+      playFile("/audio/go.mp3", playFallbackPhaseComplete, 0.9, "transient"),
+      0.9,
+      "ambient",
     );
   };
 
@@ -283,19 +316,20 @@ function createAudioEngine() {
         "/audio/beep.mp3",
         async () => playFile("/audio/go.mp3", playFallbackBeep, 1),
         1,
+        "transient",
       ),
-    playStart: async () => playFile("/audio/start-voice.mp3"),
+    playStart: async () => playFile("/audio/start-voice.mp3", undefined, 0.9, "ambient"),
     playPhaseComplete: async () =>
-      playFile("/audio/go.mp3", playFallbackPhaseComplete, 1),
+      playFile("/audio/go.mp3", playFallbackPhaseComplete, 1, "transient"),
     playCooldownCelebration: async () => {
-      await playFileAndWait(CUSTOM_CUE_FILES.applause);
+      await playFileAndWait(CUSTOM_CUE_FILES.applause, undefined, 0.9, "transient");
       await playCueWithPlaceholder(CUSTOM_CUE_FILES.goodJob);
     },
     playCustomCue: async (src: string) => playCueWithPlaceholder(src),
     playCheer: async () => {
       const randomTrack =
         CHEER_TRACKS[Math.floor(Math.random() * CHEER_TRACKS.length)];
-      await playFile(randomTrack);
+      await playFile(randomTrack, undefined, 0.9, "ambient");
     },
   };
 }
