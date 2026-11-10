@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   DEFAULT_PROGRAM,
+  STANDARD_PROGRAMS,
+  isStandardProgram,
+  withStandardPrograms,
   LAST_USED_PROGRAM_KEY,
   buildWorkoutPhases,
   clampProgram,
@@ -360,7 +363,7 @@ function getPhaseCardClass(phase: WorkoutPhase["kind"]) {
 }
 
 export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
-  const [programs, setPrograms] = useState<WorkoutProgram[]>([DEFAULT_PROGRAM]);
+  const [programs, setPrograms] = useState<WorkoutProgram[]>(STANDARD_PROGRAMS);
   const [selectedProgramId, setSelectedProgramId] = useState(DEFAULT_PROGRAM.id);
   const [draft, setDraft] = useState<ProgramDraft>(toDraft(DEFAULT_PROGRAM));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -478,7 +481,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
       try {
         const response = await fetch("/api/programs", { cache: "no-store" });
         const data = (await response.json()) as ProgramsResponse;
-        const nextPrograms = data.programs?.length ? data.programs : [DEFAULT_PROGRAM];
+        const nextPrograms = withStandardPrograms(data.programs ?? []);
 
         setPrograms(nextPrograms);
         setPersistenceEnabled(data.persistence === "enabled");
@@ -754,7 +757,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     phasesRef.current = nextPhases;
     setActiveProgram(cleanProgram);
 
-    if (programs.some((program) => program.id === cleanProgram.id)) {
+    if (!isStandardProgram(cleanProgram.id) && programs.some((program) => program.id === cleanProgram.id)) {
       setSelectedProgramId(cleanProgram.id);
       setPrograms((current) =>
         current.map((program) =>
@@ -821,8 +824,9 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     startSavingTransition(() => {
       void (async () => {
         try {
-          const method = draft.id ? "PUT" : "POST";
-          const url = draft.id ? `/api/programs/${draft.id}` : "/api/programs";
+          const updateExisting = draft.id && !isStandardProgram(draft.id);
+          const method = updateExisting ? "PUT" : "POST";
+          const url = updateExisting ? `/api/programs/${draft.id}` : "/api/programs";
           const response = await fetch(url, {
             method,
             headers: {
@@ -871,7 +875,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
     if (
       !persistenceEnabled ||
       !selectedProgramId ||
-      selectedProgramId === DEFAULT_PROGRAM.id
+      isStandardProgram(selectedProgramId)
     ) {
       return;
     }
@@ -1055,15 +1059,15 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
                       disabled={
                         isDeleting ||
                         !persistenceEnabled ||
-                        selectedProgramId === DEFAULT_PROGRAM.id
+                        isStandardProgram(selectedProgramId)
                       }
                     >
                       Delete workout
                     </button>
                   </div>
-                  {selectedProgramId === DEFAULT_PROGRAM.id ? (
+                  {isStandardProgram(selectedProgramId) ? (
                     <p className="mt-3 text-sm text-[rgba(49,31,40,0.66)]">
-                      The default workout cannot be deleted.
+                      Standard workouts are always available. Edit one and save a copy to customize it.
                     </p>
                   ) : null}
                 </div>
@@ -1105,7 +1109,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
                       onClick={saveProgram}
                       disabled={isSaving || !persistenceEnabled}
                     >
-                      {draft.id ? "Update workout" : "Save new workout"}
+                      {draft.id && isStandardProgram(draft.id) ? "Save a copy" : draft.id ? "Update workout" : "Save new workout"}
                     </button>
                   </div>
                   <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-[var(--berry)]">
@@ -1154,7 +1158,7 @@ export function TimerApp({ embeddedIntro = false }: TimerAppProps) {
                       className="field"
                       type="number"
                       min={1}
-                      max={30}
+                      max={60}
                       value={draft.sets}
                       onChange={(event) =>
                         handleDraftChange("sets", event.target.value, true)

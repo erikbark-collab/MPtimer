@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { DEFAULT_PROGRAM, type WorkoutProgram } from "@/lib/workout";
+import { STANDARD_PROGRAMS, withStandardPrograms, type WorkoutProgram } from "@/lib/workout";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type DatabaseProgram = {
@@ -34,7 +34,7 @@ export async function GET() {
 
   if (!supabase) {
     return NextResponse.json({
-      programs: [DEFAULT_PROGRAM],
+      programs: STANDARD_PROGRAMS,
       persistence: "disabled",
       message: "Supabase is not configured yet. Add env vars to enable saved programs.",
     });
@@ -55,7 +55,7 @@ export async function GET() {
   const programs = (data ?? []).map(mapProgram);
 
   return NextResponse.json({
-    programs: programs.length > 0 ? programs : [DEFAULT_PROGRAM],
+    programs: withStandardPrograms(programs),
     persistence: "enabled",
   });
 }
